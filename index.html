@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+  <base target="_top">
+
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0">
+
+  <title>QR Scanner</title>
+
+  <script src="https://unpkg.com/html5-qrcode"
+          type="text/javascript">
+  </script>
+
+  <style>
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 430px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    h1 {
+      margin-bottom: 8px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #aaa;
+      margin-bottom: 20px;
+    }
+
+    #reader {
+      width: 100%;
+      background: #000;
+      border-radius: 20px;
+      overflow: hidden;
+      border: 2px solid #00ff88;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 18px;
+      padding: 15px;
+      border: none;
+      border-radius: 12px;
+      background: #00ff88;
+      color: #000;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 12px;
+      background: #1e1e1e;
+      display: none;
+    }
+
+    .id {
+      font-size: 24px;
+      font-weight: bold;
+      color: #00ff88;
+      margin-top: 8px;
+      direction: ltr;
+    }
+
+    .success {
+      color: #00ff88;
+    }
+
+    .error {
+      color: #ff4444;
+    }
+
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+
+    <h1>QR Scanner</h1>
+
+    <div class="subtitle">
+      وجّه الكاميرا نحو QR Code
+    </div>
+
+    <div id="reader"></div>
+
+    <button onclick="startScanner()">
+      📷 Start Camera
+    </button>
+
+    <div id="result" class="result">
+      <div id="message"></div>
+      <div id="scannedId" class="id"></div>
+    </div>
+
+  </div>
+
+
+<script>
+
+let scanner;
+let scanning = false;
+let lastScanned = "";
+let lastScanTime = 0;
+
+
+function startScanner() {
+
+  if (scanning) {
+    return;
+  }
+
+  scanner = new Html5Qrcode("reader");
+
+  const config = {
+    fps: 10,
+
+    qrbox: {
+      width: 280,
+      height: 280
+    },
+
+    aspectRatio: 1.0
+  };
+
+
+  scanner.start(
+
+    {
+      facingMode: "environment"
+    },
+
+    config,
+
+    onScanSuccess,
+
+    onScanFailure
+
+  )
+  .then(() => {
+
+    scanning = true;
+
+    showMessage(
+      "الكاميرا شغالة — وجّه الـ QR داخل الإطار",
+      ""
+    );
+
+  })
+  .catch(error => {
+
+    console.error(error);
+
+    showMessage(
+      "مش قادر أشغل الكاميرا. تأكد من إعطاء Permission للمتصفح.",
+      "error"
+    );
+
+  });
+
+}
+
+
+function onScanSuccess(decodedText, decodedResult) {
+
+  const now = Date.now();
+
+  // منع تسجيل نفس QR عدة مرات بسرعة
+  if (
+    decodedText === lastScanned &&
+    now - lastScanTime < 3000
+  ) {
+    return;
+  }
+
+  lastScanned = decodedText;
+  lastScanTime = now;
+
+
+  console.log("QR:", decodedText);
+
+
+  // إظهار الـ ID
+  document.getElementById("scannedId").innerText =
+    decodedText;
+
+
+  showMessage(
+    "جاري تسجيل الـ ID في Google Sheet...",
+    ""
+  );
+
+
+  // إرسال الـ ID إلى Apps Script
+  google.script.run
+
+    .withSuccessHandler(function(response) {
+
+      if (response.success) {
+
+        showMessage(
+          "✓ تم تسجيل الـ ID بنجاح",
+          "success"
+        );
+
+      } else {
+
+        showMessage(
+          response.message,
+          "error"
+        );
+
+      }
+
+    })
+
+    .withFailureHandler(function(error) {
+
+      console.error(error);
+
+      showMessage(
+        "حدث خطأ أثناء الاتصال بـ Google Sheet",
+        "error"
+      );
+
+    })
+
+    .saveScan(decodedText);
+
+}
+
+
+function onScanFailure(error) {
+  // طبيعي جدًا يحصل أثناء البحث عن QR
+}
+
+
+function showMessage(text, type) {
+
+  const result =
+    document.getElementById("result");
+
+  const message =
+    document.getElementById("message");
+
+  result.style.display = "block";
+
+  message.innerText = text;
+
+  message.className = type;
+
+}
+
+
+</script>
+
+</body>
+</html>
